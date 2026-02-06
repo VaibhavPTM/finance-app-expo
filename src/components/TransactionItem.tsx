@@ -74,6 +74,7 @@ function TransactionItemComponent({ transaction, onEdit, onDelete }: Props) {
                 styles.amount,
                 transaction.type === 'income' ? styles.amountIncome : styles.amountExpense,
               ]}
+              numberOfLines={1}
             >
               {transaction.type === 'income' ? '+' : '-'}
               {formatCurrency(transaction.amount)}
@@ -138,8 +139,10 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   content: { flex: 1, minWidth: 0 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   categoryName: {
+    flex: 1,
+    minWidth: 0,
     fontWeight: '600',
     fontSize: 16,
     color: colors.text,
@@ -148,15 +151,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    flexShrink: 0,
     backgroundColor: colors.background,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 4,
     borderRadius: 12,
-    maxWidth: 120,
+    maxWidth: 90,
   },
-  badgeText: { fontSize: 12, color: colors.textSecondary },
+  badgeText: { fontSize: 11, color: colors.textSecondary },
   notes: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
-  right: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  right: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 },
   amount: { fontSize: 17, fontWeight: '700' },
   amountIncome: { color: colors.income },
   amountExpense: { color: colors.expense },

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -31,14 +31,21 @@ type Props = {
   onClose: () => void;
   onSave: (category: Omit<Category, 'id'>) => void;
   categories: Category[];
+  defaultParentId?: string;
+  defaultType?: TransactionType;
 };
 
-export function AddCategoryModal({ visible, onClose, onSave, categories }: Props) {
+export function AddCategoryModal({ visible, onClose, onSave, categories, defaultParentId, defaultType }: Props) {
   const [name, setName] = useState('');
-  const [type, setType] = useState<TransactionType>('expense');
-  const [parentId, setParentId] = useState<string | null>(null);
+  const [type, setType] = useState<TransactionType>(defaultType ?? 'expense');
+  const [parentId, setParentId] = useState<string | null>(defaultParentId ?? null);
   const [selectedIcon, setSelectedIcon] = useState('Circle');
   const [selectedColor, setSelectedColor] = useState('#3b82f6');
+
+  useEffect(() => {
+    if (visible && defaultType) setType(defaultType);
+    if (visible && defaultParentId != null) setParentId(defaultParentId);
+  }, [visible, defaultType, defaultParentId]);
 
   const mainCategories = getMainCategories(categories, type);
 
@@ -76,95 +83,102 @@ export function AddCategoryModal({ visible, onClose, onSave, categories }: Props
         <View style={styles.sheet} onStartShouldSetResponder={() => true}>
           <Text style={styles.title}>Add Category</Text>
 
-          <View style={styles.toggleWrap}>
-            <Text style={[styles.toggleLabel, type === 'expense' && styles.toggleLabelRed]}>Expense</Text>
-            <TouchableOpacity
-              style={[styles.switch, type === 'income' && styles.switchOn]}
-              onPress={() => setType(type === 'income' ? 'expense' : 'income')}
-            >
-              <View style={[styles.switchKnob, type === 'income' && styles.switchKnobOn]} />
-            </TouchableOpacity>
-            <Text style={[styles.toggleLabel, type === 'income' && styles.toggleLabelGreen]}>Income</Text>
-          </View>
-
-          <Text style={styles.label}>Parent category</Text>
-          <View style={styles.parentRow}>
-            <TouchableOpacity
-              style={[styles.parentChip, !parentId && styles.parentChipActive]}
-              onPress={() => setParentId(null)}
-            >
-              <Text style={[styles.parentChipText, !parentId && styles.parentChipTextActive]}>
-                None (Main category)
-              </Text>
-            </TouchableOpacity>
-            {mainCategories.map((main) => (
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={true}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.toggleWrap}>
+              <Text style={[styles.toggleLabel, type === 'expense' && styles.toggleLabelRed]}>Expense</Text>
               <TouchableOpacity
-                key={main.id}
-                style={[styles.parentChip, parentId === main.id && styles.parentChipActive]}
-                onPress={() => setParentId(main.id)}
+                style={[styles.switch, type === 'income' && styles.switchOn]}
+                onPress={() => setType(type === 'income' ? 'expense' : 'income')}
               >
-                <Text style={[styles.parentChipText, parentId === main.id && styles.parentChipTextActive]}>
-                  {main.name}
+                <View style={[styles.switchKnob, type === 'income' && styles.switchKnobOn]} />
+              </TouchableOpacity>
+              <Text style={[styles.toggleLabel, type === 'income' && styles.toggleLabelGreen]}>Income</Text>
+            </View>
+
+            <Text style={styles.label}>Parent category</Text>
+            <View style={styles.parentRow}>
+              <TouchableOpacity
+                style={[styles.parentChip, !parentId && styles.parentChipActive]}
+                onPress={() => setParentId(null)}
+              >
+                <Text style={[styles.parentChipText, !parentId && styles.parentChipTextActive]}>
+                  None (Main category)
                 </Text>
               </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text style={styles.label}>Category name</Text>
-          <TextInput
-            style={styles.input}
-            value={name}
-            onChangeText={setName}
-            placeholder="e.g. Groceries"
-            placeholderTextColor={colors.textMuted}
-          />
-
-          <Text style={styles.label}>Icon</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.iconScroll}>
-            {ICON_OPTIONS.map((iconName) => {
-              const Icon = getIcon(iconName);
-              const selected = selectedIcon === iconName;
-              return (
+              {mainCategories.map((main) => (
                 <TouchableOpacity
-                  key={iconName}
-                  style={[styles.iconBtn, selected && { backgroundColor: `${selectedColor}25`, borderColor: selectedColor }]}
-                  onPress={() => setSelectedIcon(iconName)}
+                  key={main.id}
+                  style={[styles.parentChip, parentId === main.id && styles.parentChipActive]}
+                  onPress={() => setParentId(main.id)}
                 >
-                  <Icon size={24} color={selected ? selectedColor : colors.textMuted} />
+                  <Text style={[styles.parentChipText, parentId === main.id && styles.parentChipTextActive]}>
+                    {main.name}
+                  </Text>
                 </TouchableOpacity>
-              );
-            })}
+              ))}
+            </View>
+
+            <Text style={styles.label}>Category name</Text>
+            <TextInput
+              style={styles.input}
+              value={name}
+              onChangeText={setName}
+              placeholder="e.g. Groceries"
+              placeholderTextColor={colors.textMuted}
+            />
+
+            <Text style={styles.label}>Icon</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.iconScroll}>
+              {ICON_OPTIONS.map((iconName) => {
+                const Icon = getIcon(iconName);
+                const selected = selectedIcon === iconName;
+                return (
+                  <TouchableOpacity
+                    key={iconName}
+                    style={[styles.iconBtn, selected && { backgroundColor: `${selectedColor}25`, borderColor: selectedColor }]}
+                    onPress={() => setSelectedIcon(iconName)}
+                  >
+                    <Icon size={24} color={selected ? selectedColor : colors.textMuted} />
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <Text style={styles.label}>Color</Text>
+            <View style={styles.colorRow}>
+              {COLOR_OPTIONS.map((color) => (
+                <TouchableOpacity
+                  key={color}
+                  style={[styles.colorBtn, { backgroundColor: color }, selectedColor === color && styles.colorBtnSelected]}
+                  onPress={() => setSelectedColor(color)}
+                />
+              ))}
+            </View>
+
+            <View style={styles.preview}>
+              <View style={[styles.previewIconWrap, { backgroundColor: `${selectedColor}20` }]}>
+                <IconPreview size={28} color={selectedColor} />
+              </View>
+              <View>
+                <Text style={styles.previewName}>{name || 'Category name'}</Text>
+                <Text style={styles.previewType}>{type}</Text>
+              </View>
+            </View>
+
+            <View style={styles.actions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={handleClose}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveBtn} onPress={handleSubmit}>
+                <Text style={styles.saveBtnText}>Add Category</Text>
+              </TouchableOpacity>
+            </View>
           </ScrollView>
-
-          <Text style={styles.label}>Color</Text>
-          <View style={styles.colorRow}>
-            {COLOR_OPTIONS.map((color) => (
-              <TouchableOpacity
-                key={color}
-                style={[styles.colorBtn, { backgroundColor: color }, selectedColor === color && styles.colorBtnSelected]}
-                onPress={() => setSelectedColor(color)}
-              />
-            ))}
-          </View>
-
-          <View style={styles.preview}>
-            <View style={[styles.previewIconWrap, { backgroundColor: `${selectedColor}20` }]}>
-              <IconPreview size={28} color={selectedColor} />
-            </View>
-            <View>
-              <Text style={styles.previewName}>{name || 'Category name'}</Text>
-              <Text style={styles.previewType}>{type}</Text>
-            </View>
-          </View>
-
-          <View style={styles.actions}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={handleClose}>
-              <Text style={styles.cancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSubmit}>
-              <Text style={styles.saveBtnText}>Add Category</Text>
-            </TouchableOpacity>
-          </View>
         </View>
       </TouchableOpacity>
     </Modal>
@@ -178,8 +192,10 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    maxHeight: '90%',
+    height: '90%',
   },
+  scroll: { flex: 1 },
+  scrollContent: { paddingBottom: 32 },
   title: { fontSize: 20, fontWeight: '700', color: colors.text, marginBottom: 20 },
   toggleWrap: {
     flexDirection: 'row',

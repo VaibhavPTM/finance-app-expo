@@ -13,6 +13,7 @@ type FinanceContextType = {
   updateTransaction: (id: string, t: Omit<Transaction, 'id'>) => void;
   deleteTransaction: (id: string) => void;
   addCategory: (c: Omit<Category, 'id'>) => void;
+  deleteCategory: (id: string) => void;
   addPaymentMethod: (p: Omit<PaymentMethod, 'id'>) => void;
   setQuickAddCategoryIds: (ids: string[]) => void;
   loadData: () => Promise<void>;
@@ -88,6 +89,19 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const deleteCategory = useCallback((id: string) => {
+    setCategories((prev) => {
+      const next = prev.filter((c) => c.id !== id && c.parentId !== id);
+      storage.saveCategories(next);
+      return next;
+    });
+    setQuickAddCategoryIdsState((prev) => {
+      const next = prev.filter((x) => x !== id);
+      storage.saveQuickAddCategoryIds(next);
+      return next;
+    });
+  }, []);
+
   const addPaymentMethod = useCallback((p: Omit<PaymentMethod, 'id'>) => {
     const newP: PaymentMethod = { ...p, id: `custom-${Date.now()}` };
     setPaymentMethods((prev) => {
@@ -108,6 +122,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       updateTransaction,
       deleteTransaction,
       addCategory,
+      deleteCategory,
       addPaymentMethod,
       setQuickAddCategoryIds,
       loadData,
@@ -122,6 +137,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       updateTransaction,
       deleteTransaction,
       addCategory,
+      deleteCategory,
       addPaymentMethod,
       setQuickAddCategoryIds,
       loadData,
