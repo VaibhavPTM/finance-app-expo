@@ -1,6 +1,12 @@
-import React, { useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
-import { GestureDetector, Gesture } from 'react-native-gesture-handler';
+import React, { useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Modal,
+  Pressable,
+} from 'react-native';
 import { formatCurrency } from '../utils/finance';
 import { getIcon } from './IconMap';
 import { Transaction } from '../types/finance';
@@ -12,57 +18,29 @@ type Props = {
   onDelete: (id: string) => void;
 };
 
-const SWIPE_THRESHOLD = 80;
-
-export function TransactionItem({ transaction, onEdit, onDelete }: Props) {
-  const translateX = useRef(new Animated.Value(0)).current;
+function TransactionItemComponent({ transaction, onEdit, onDelete }: Props) {
+  const [showMenu, setShowMenu] = useState(false);
   const CategoryIcon = getIcon(transaction.category.icon || 'Circle');
   const PaymentIcon = getIcon(transaction.paymentMethod.icon || 'Wallet');
+  const MoreIcon = getIcon('MoreHorizontal');
 
-  const pan = Gesture.Pan()
-    .onUpdate((e) => {
-      const x = Math.max(-150, Math.min(150, e.translationX));
-      translateX.setValue(x);
-    })
-    .onEnd((e) => {
-      const x = e.translationX;
-      if (x > SWIPE_THRESHOLD) {
-        onEdit(transaction);
-      } else if (x < -SWIPE_THRESHOLD) {
-        onDelete(transaction.id);
-      }
-      Animated.spring(translateX, {
-        toValue: 0,
-        useNativeDriver: true,
-        damping: 20,
-        stiffness: 300,
-      }).start();
-    });
+  const handleEdit = useCallback(() => {
+    setShowMenu(false);
+    onEdit(transaction);
+  }, [onEdit, transaction]);
+
+  const handleDelete = useCallback(() => {
+    setShowMenu(false);
+    onDelete(transaction.id);
+  }, [onDelete, transaction.id]);
 
   return (
-    <View style={styles.wrapper}>
-      <View style={styles.actions}>
+    <>
+      <View style={styles.wrapper}>
         <TouchableOpacity
-          style={[styles.actionBtn, styles.editBtn]}
-          onPress={() => onEdit(transaction)}
-        >
-          <Text style={styles.actionText}>Edit</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionBtn, styles.deleteBtn]}
-          onPress={() => onDelete(transaction.id)}
-        >
-          <Text style={styles.actionTextDelete}>Delete</Text>
-        </TouchableOpacity>
-      </View>
-      <GestureDetector gesture={pan}>
-        <Animated.View
-          style={[
-            styles.card,
-            {
-              transform: [{ translateX }],
-            },
-          ]}
+          style={styles.card}
+          activeOpacity={0.7}
+          onLongPress={() => setShowMenu(true)}
         >
           <View
             style={[
@@ -90,24 +68,54 @@ export function TransactionItem({ transaction, onEdit, onDelete }: Props) {
               </Text>
             ) : null}
           </View>
-          <Text
-            style={[
-              styles.amount,
-              transaction.type === 'income' ? styles.amountIncome : styles.amountExpense,
-            ]}
-          >
-            {transaction.type === 'income' ? '+' : '-'}
-            {formatCurrency(transaction.amount)}
-          </Text>
-        </Animated.View>
-      </GestureDetector>
-    </View>
+          <View style={styles.right}>
+            <Text
+              style={[
+                styles.amount,
+                transaction.type === 'income' ? styles.amountIncome : styles.amountExpense,
+              ]}
+            >
+              {transaction.type === 'income' ? '+' : '-'}
+              {formatCurrency(transaction.amount)}
+            </Text>
+            <TouchableOpacity
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              onPress={() => setShowMenu(true)}
+              style={styles.moreBtn}
+            >
+              <MoreIcon size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </View>
+
+      <Modal visible={showMenu} transparent animationType="fade">
+        <Pressable style={styles.menuOverlay} onPress={() => setShowMenu(false)}>
+          <View style={styles.menuSheet}>
+            <TouchableOpacity style={styles.menuOption} onPress={handleEdit} activeOpacity={0.7}>
+              <Text style={styles.menuOptionTextEdit}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuOption} onPress={handleDelete} activeOpacity={0.7}>
+              <Text style={styles.menuOptionTextDelete}>Delete</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.menuOption, styles.menuOptionCancel]}
+              onPress={() => setShowMenu(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.menuOptionTextCancel}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
+export const TransactionItem = React.memo(TransactionItemComponent);
+
 const styles = StyleSheet.create({
   wrapper: {
-    position: 'relative',
     marginHorizontal: 16,
     marginBottom: 8,
     borderRadius: 16,
@@ -116,43 +124,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  actions: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-  },
-  actionBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-  },
-  editBtn: {
-    backgroundColor: colors.incomeLight,
-  },
-  deleteBtn: {
-    backgroundColor: colors.expenseLight,
-  },
-  actionText: {
-    color: colors.primary,
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  actionTextDelete: {
-    color: colors.expense,
-    fontWeight: '600',
-    fontSize: 14,
-  },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: colors.card,
   },
   iconWrap: {
     width: 48,
@@ -162,15 +137,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
   },
-  content: {
-    flex: 1,
-    minWidth: 0,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
+  content: { flex: 1, minWidth: 0 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   categoryName: {
     fontWeight: '600',
     fontSize: 16,
@@ -186,24 +154,27 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     maxWidth: 120,
   },
-  badgeText: {
-    fontSize: 12,
-    color: colors.textSecondary,
+  badgeText: { fontSize: 12, color: colors.textSecondary },
+  notes: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+  right: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  amount: { fontSize: 17, fontWeight: '700' },
+  amountIncome: { color: colors.income },
+  amountExpense: { color: colors.expense },
+  moreBtn: { padding: 4 },
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+    padding: 16,
   },
-  notes: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 2,
+  menuSheet: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    overflow: 'hidden',
   },
-  amount: {
-    fontSize: 17,
-    fontWeight: '700',
-    marginLeft: 8,
-  },
-  amountIncome: {
-    color: colors.income,
-  },
-  amountExpense: {
-    color: colors.expense,
-  },
+  menuOption: { padding: 18 },
+  menuOptionCancel: { borderTopWidth: 1, borderTopColor: colors.border },
+  menuOptionTextEdit: { fontSize: 16, fontWeight: '600', color: colors.primary },
+  menuOptionTextDelete: { fontSize: 16, fontWeight: '600', color: colors.expense },
+  menuOptionTextCancel: { fontSize: 16, color: colors.textSecondary },
 });

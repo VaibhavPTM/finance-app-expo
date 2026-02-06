@@ -14,7 +14,10 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { format } from 'date-fns';
 import { useFinance } from '../context/FinanceContext';
+import { useTheme } from '../context/ThemeContext';
 import { getIcon } from '../components/IconMap';
+import { AppHeader } from '../components/AppHeader';
+import { getCategoriesGroupedByMain } from '../utils/finance';
 import { colors } from '../theme';
 import { Transaction, TransactionType, Category, PaymentMethod } from '../types/finance';
 
@@ -26,12 +29,20 @@ export function AddEntryScreen() {
   const editId = route.params?.editId;
   const preSelectedCategoryId = route.params?.preSelectedCategoryId;
 
+  const { colors } = useTheme();
   const { transactions, categories, paymentMethods, addTransaction, updateTransaction } = useFinance();
   const editing = transactions.find((t) => t.id === editId);
+  const preSelectedCategory = preSelectedCategoryId
+    ? categories.find((c) => c.id === preSelectedCategoryId)
+    : null;
 
-  const [type, setType] = useState<TransactionType>(editing?.type ?? (preSelectedCategoryId ? 'expense' : 'expense'));
+  const [type, setType] = useState<TransactionType>(
+    editing?.type ?? preSelectedCategory?.type ?? 'expense'
+  );
   const [amount, setAmount] = useState(editing?.amount.toString() ?? '');
-  const [categoryId, setCategoryId] = useState(editing?.category.id ?? preSelectedCategoryId ?? '');
+  const [categoryId, setCategoryId] = useState(
+    editing?.category.id ?? preSelectedCategoryId ?? ''
+  );
   const [paymentMethodId, setPaymentMethodId] = useState(editing?.paymentMethod.id ?? paymentMethods[0]?.id ?? '');
   const [date, setDate] = useState(editing?.date ?? new Date());
   const [notes, setNotes] = useState(editing?.notes ?? '');
@@ -46,7 +57,18 @@ export function AddEntryScreen() {
     }
   }, [type, categories]);
 
+  useEffect(() => {
+    if (preSelectedCategoryId && !editing && categories.length > 0) {
+      const cat = categories.find((c) => c.id === preSelectedCategoryId);
+      if (cat) {
+        setType(cat.type);
+        setCategoryId(cat.id);
+      }
+    }
+  }, [preSelectedCategoryId, editing, categories]);
+
   const filteredCategories = categories.filter((c) => c.type === type);
+  const categoryGroups = getCategoriesGroupedByMain(filteredCategories, type);
   const selectedCategory = categories.find((c) => c.id === categoryId);
   const selectedPayment = paymentMethods.find((p) => p.id === paymentMethodId);
 
@@ -76,14 +98,14 @@ export function AddEntryScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.header}>
+      <AppHeader title={editing ? 'Edit Entry' : 'Add Entry'} />
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
-          <Text style={styles.headerCancel}>Cancel</Text>
+          <Text style={[styles.headerCancel, { color: colors.primary }]}>Cancel</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{editing ? 'Edit Entry' : 'Add Entry'}</Text>
         <View style={styles.headerBtn} />
       </View>
 
@@ -195,28 +217,38 @@ export function AddEntryScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Category modal */}
+      {/* Category modal - grouped by main category */}
       <Modal visible={showCategoryModal} transparent animationType="slide">
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowCategoryModal(false)}>
-          <View style={styles.modalSheet} onStartShouldSetResponder={() => true}>
-            <Text style={styles.modalTitle}>Select Category</Text>
+          <View style={[styles.modalSheet, { backgroundColor: colors.card }]} onStartShouldSetResponder={() => true}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Select Category</Text>
             <ScrollView style={styles.modalScroll}>
-              {filteredCategories.map((cat) => {
-                const Icon = getIcon(cat.icon || 'Circle');
+              {categoryGroups.map((group) => {
+                const selectable = group.children.length > 0 ? group.children : [group.main];
                 return (
-                  <TouchableOpacity
-                    key={cat.id}
-                    style={styles.modalOption}
-                    onPress={() => {
-                      setCategoryId(cat.id);
-                      setShowCategoryModal(false);
-                    }}
-                  >
-                    <View style={[styles.modalOptionIcon, { backgroundColor: `${cat.color}20` }]}>
-                      <Icon size={22} color={cat.color} />
-                    </View>
-                    <Text style={styles.modalOptionText}>{cat.name}</Text>
-                  </TouchableOpacity>
+                  <View key={group.main.id} style={styles.categoryGroup}>
+                    <Text style={[styles.categoryGroupTitle, { color: colors.textSecondary }]}>
+                      {group.main.name}
+                    </Text>
+                    {selectable.map((cat) => {
+                      const Icon = getIcon(cat.icon || 'Circle');
+                      return (
+                        <TouchableOpacity
+                          key={cat.id}
+                          style={[styles.modalOption, { borderBottomColor: colors.border }]}
+                          onPress={() => {
+                            setCategoryId(cat.id);
+                            setShowCategoryModal(false);
+                          }}
+                        >
+                          <View style={[styles.modalOptionIcon, { backgroundColor: `${cat.color}20` }]}>
+                            <Icon size={22} color={cat.color} />
+                          </View>
+                          <Text style={[styles.modalOptionText, { color: colors.text }]}>{cat.name}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
                 );
               })}
             </ScrollView>
@@ -368,6 +400,13 @@ const styles = StyleSheet.create({
   },
   modalTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 16 },
   modalScroll: { maxHeight: 320 },
+  categoryGroup: { marginBottom: 16 },
+  categoryGroupTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 6,
+    paddingHorizontal: 4,
+  },
   modalOption: {
     flexDirection: 'row',
     alignItems: 'center',

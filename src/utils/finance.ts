@@ -12,7 +12,7 @@ import {
   isWithinInterval,
   endOfDay,
 } from 'date-fns';
-import { Transaction, Category, PaymentMethod, TimePeriod } from '../types/finance';
+import { Transaction, Category, PaymentMethod, TimePeriod, TransactionType } from '../types/finance';
 
 export const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('en-US', {
@@ -133,6 +133,30 @@ export const formatTimePeriod = (period: TimePeriod): string => {
       return 'All Time';
   }
 };
+
+/** Main categories have no parentId */
+export function getMainCategories(categories: Category[], type?: TransactionType): Category[] {
+  let list = categories.filter((c) => !c.parentId);
+  if (type) list = list.filter((c) => c.type === type);
+  return list;
+}
+
+/** Subcategories under a main category */
+export function getSubcategories(categories: Category[], parentId: string): Category[] {
+  return categories.filter((c) => c.parentId === parentId);
+}
+
+/** Group for picker: main category + its subcategories (or just main) */
+export function getCategoriesGroupedByMain(
+  categories: Category[],
+  type: TransactionType
+): { main: Category; children: Category[] }[] {
+  const mains = getMainCategories(categories, type);
+  return mains.map((main) => ({
+    main,
+    children: getSubcategories(categories, main.id),
+  }));
+}
 
 export const defaultCategories: Category[] = [
   { id: 'salary', name: 'Salary', icon: 'Briefcase', color: '#10b981', type: 'income' },

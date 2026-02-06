@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
   TextInput,
-  ScrollView,
   TouchableOpacity,
   StyleSheet,
   Modal,
+  SectionList,
+  ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import {
@@ -18,9 +19,10 @@ import {
 import { TransactionItem } from '../components/TransactionItem';
 import { EmptyState } from '../components/EmptyState';
 import { useFinance } from '../context/FinanceContext';
-import { getIcon } from '../components/IconMap';
-import { colors } from '../theme';
-import { FilterOptions, TimePeriod } from '../types/finance';
+import { useTheme } from '../context/ThemeContext';
+import { AppHeader } from '../components/AppHeader';
+import { colors as staticColors } from '../theme';
+import { FilterOptions, TimePeriod, Transaction, TransactionTypeFilter } from '../types/finance';
 
 const SORT_OPTIONS: { value: FilterOptions['sortBy']; label: string }[] = [
   { value: 'date-newest', label: 'Newest First' },
@@ -31,69 +33,140 @@ const SORT_OPTIONS: { value: FilterOptions['sortBy']; label: string }[] = [
 
 const PERIODS: TimePeriod[] = ['all', 'this-week', 'last-week', 'this-month', 'last-month'];
 
+const TYPE_FILTERS: { value: TransactionTypeFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'income', label: 'Income' },
+  { value: 'expense', label: 'Expense' },
+];
+
+type Section = { title: string; dateKey: string; data: Transaction[] };
+
 export function TransactionsScreen() {
   const navigation = useNavigation<any>();
+  const { colors } = useTheme();
   const { transactions, categories, paymentMethods, deleteTransaction } = useFinance();
   const [filters, setFilters] = useState<FilterOptions>({
     sortBy: 'date-newest',
     timePeriod: 'all',
     searchQuery: '',
+    transactionType: 'all' as TransactionTypeFilter,
   });
   const [showSortModal, setShowSortModal] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false);
 
-  let list = filterTransactionsByPeriod(transactions, filters.timePeriod);
-  if (filters.searchQuery) {
-    const q = filters.searchQuery.toLowerCase();
-    list = list.filter(
-      (t) =>
-        t.category.name.toLowerCase().includes(q) ||
-        (t.notes?.toLowerCase().includes(q)) ||
-        t.paymentMethod.name.toLowerCase().includes(q)
-    );
-  }
-  if (filters.categoryId && filters.categoryId !== 'all') {
-    list = list.filter((t) => t.category.id === filters.categoryId);
-  }
-  if (filters.paymentMethodId && filters.paymentMethodId !== 'all') {
-    list = list.filter((t) => t.paymentMethod.id === filters.paymentMethodId);
-  }
-  list = [...list].sort((a, b) => {
-    switch (filters.sortBy) {
-      case 'date-newest':
-        return b.date.getTime() - a.date.getTime();
-      case 'date-oldest':
-        return a.date.getTime() - b.date.getTime();
-      case 'amount-highest':
-        return b.amount - a.amount;
-      case 'amount-lowest':
-        return a.amount - b.amount;
-      default:
-        return 0;
+  const sections = useMemo(() => {
+    let list = filterTransactionsByPeriod(transactions, filters.timePeriod);
+    if (filters.transactionType && filters.transactionType !== 'all') {
+      list = list.filter((t) => t.type === filters.transactionType);
     }
-  });
-
-  const grouped = groupTransactionsByDate(list);
-  const sortedDates = Array.from(grouped.keys()).sort((a, b) =>
-    filters.sortBy.startsWith('date-newest') ? b.localeCompare(a) : a.localeCompare(b)
-  );
+    if (filters.searchQuery) {
+      const q = filters.searchQuery.toLowerCase();
+      list = list.filter(
+        (t) =>
+          t.category.name.toLowerCase().includes(q) ||
+          (t.notes?.toLowerCase().includes(q)) ||
+          t.paymentMethod.name.toLowerCase().includes(q)
+      );
+    }
+    if (filters.categoryId && filters.categoryId !== 'all') {
+      list = list.filter((t) => t.category.id === filters.categoryId);
+    }
+    if (filters.paymentMethodId && filters.paymentMethodId !== 'all') {
+      list = list.filter((t) => t.paymentMethod.id === filters.paymentMethodId);
+    }
+    list = [...list].sort((a, b) => {
+      switch (filters.sortBy) {
+        case 'date-newest':
+          return b.date.getTime() - a.date.getTime();
+        case 'date-oldest':
+          return a.date.getTime() - b.date.getTime();
+        case 'amount-highest':
+          return b.amount - a.amount;
+        case 'amount-lowest':
+          return a.amount - b.amount;
+        default:
+          return 0;
+      }
+    });
+    const grouped = groupTransactionsByDate(list);
+    const sortedDates = Array.from(grouped.keys()).sort((a, b) =>
+      filters.sortBy?.startsWith('date-newest') ? b.localeCompare(a) : a.localeCompare(b)
+    );
+    return sortedDates.map((dateKey) => {
+      const data = grouped.get(dateKey) || [];
+      const first = data[0];
+      return {
+        title: first ? formatDate(first.date) : dateKey,
+        dateKey,
+        data,
+      };
+    }).filter((s) => s.data.length > 0);
+  }, [transactions, filters]);
 
   const activeFilters =
     (filters.categoryId && filters.categoryId !== 'all' ? 1 : 0) +
-    (filters.paymentMethodId && filters.paymentMethodId !== 'all' ? 1 : 0);
+    (filters.paymentMethodId && filters.paymentMethodId !== 'all' ? 1 : 0) +
+    (filters.transactionType && filters.transactionType !== 'all' ? 1 : 0);
 
-  const openAddEntry = () => {
+  const openAddEntry = useCallback(() => {
     navigation.navigate('AddEntry', {});
-  };
+  }, [navigation]);
 
-  const handleEdit = (t: any) => {
-    navigation.navigate('AddEntry', { editId: t.id });
-  };
+  const handleEdit = useCallback(
+    (t: Transaction) => {
+      navigation.navigate('AddEntry', { editId: t.id });
+    },
+    [navigation]
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: Transaction }) => (
+      <TransactionItem
+        transaction={item}
+        onEdit={handleEdit}
+        onDelete={deleteTransaction}
+      />
+    ),
+    [handleEdit, deleteTransaction]
+  );
+
+  const renderSectionHeader = useCallback(
+    ({ section }: { section: Section }) => (
+      <View style={styles.sectionHeader}>
+        <Text style={styles.dayTitle}>{section.title}</Text>
+      </View>
+    ),
+    []
+  );
+
+  const keyExtractor = useCallback((item: Transaction) => item.id, []);
+
+  const listEmpty = sections.length === 0;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Transactions</Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <AppHeader title="Transactions" />
+      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <Text style={[styles.title, { color: colors.text }]}>Transactions</Text>
+
+        <View style={styles.typeRow}>
+          {TYPE_FILTERS.map((opt) => (
+            <TouchableOpacity
+              key={opt.value}
+              style={[styles.typeChip, filters.transactionType === opt.value && styles.typeChipActive]}
+              onPress={() => setFilters((f) => ({ ...f, transactionType: opt.value }))}
+            >
+              <Text
+                style={[
+                  styles.typeChipText,
+                  filters.transactionType === opt.value && styles.typeChipTextActive,
+                ]}
+              >
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
         <TouchableOpacity style={styles.periodBtn} onPress={() => setShowFilterModal(true)}>
           <Text style={styles.periodBtnText}>{formatTimePeriod(filters.timePeriod)}</Text>
@@ -106,7 +179,7 @@ export function TransactionsScreen() {
             style={styles.searchInput}
             placeholder="Search transactions..."
             placeholderTextColor={colors.textMuted}
-            value={filters.searchQuery}
+            value={filters.searchQuery || ''}
             onChangeText={(q) => setFilters((f) => ({ ...f, searchQuery: q }))}
           />
         </View>
@@ -132,56 +205,53 @@ export function TransactionsScreen() {
         </View>
       </View>
 
-      {list.length === 0 ? (
+      {listEmpty ? (
         <View style={styles.emptyWrap}>
           <EmptyState
             iconName="Wallet"
             title={
-              filters.searchQuery || filters.categoryId || filters.paymentMethodId
+              filters.searchQuery ||
+              filters.categoryId ||
+              filters.paymentMethodId ||
+              (filters.transactionType && filters.transactionType !== 'all')
                 ? 'No results found'
                 : 'No transactions yet'
             }
             description={
-              filters.searchQuery || filters.categoryId || filters.paymentMethodId
+              filters.searchQuery ||
+              filters.categoryId ||
+              filters.paymentMethodId ||
+              (filters.transactionType && filters.transactionType !== 'all')
                 ? 'Try adjusting your filters or search query'
                 : 'Start tracking your finances by adding your first transaction'
             }
             action={
-              !filters.searchQuery && !filters.categoryId && !filters.paymentMethodId
+              !filters.searchQuery &&
+              !filters.categoryId &&
+              !filters.paymentMethodId &&
+              (!filters.transactionType || filters.transactionType === 'all')
                 ? { label: 'Add Transaction', onPress: openAddEntry }
                 : undefined
             }
           />
         </View>
       ) : (
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
+        <SectionList
+          sections={sections}
+          keyExtractor={keyExtractor}
+          renderItem={renderItem}
+          renderSectionHeader={renderSectionHeader}
+          stickySectionHeadersEnabled={false}
+          contentContainerStyle={styles.listContent}
+          style={styles.list}
           showsVerticalScrollIndicator={false}
-        >
-          {sortedDates.map((dateKey) => {
-            const dayTransactions = grouped.get(dateKey) || [];
-            const first = dayTransactions[0];
-            if (!first) return null;
-            return (
-              <View key={dateKey} style={styles.dayGroup}>
-                <Text style={styles.dayTitle}>{formatDate(first.date)}</Text>
-                {dayTransactions.map((t) => (
-                  <TransactionItem
-                    key={t.id}
-                    transaction={t}
-                    onEdit={handleEdit}
-                    onDelete={deleteTransaction}
-                  />
-                ))}
-              </View>
-            );
-          })}
-          <View style={{ height: 100 }} />
-        </ScrollView>
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={12}
+          windowSize={8}
+          initialNumToRender={10}
+        />
       )}
 
-      {/* Sort modal */}
       <Modal visible={showSortModal} transparent animationType="fade">
         <TouchableOpacity
           style={styles.modalOverlay}
@@ -205,7 +275,6 @@ export function TransactionsScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Filter modal (period + category + payment) */}
       <Modal visible={showFilterModal} transparent animationType="slide">
         <TouchableOpacity
           style={styles.modalOverlay}
@@ -270,7 +339,8 @@ export function TransactionsScreen() {
                 <Text
                   style={[
                     styles.chipText,
-                    (!filters.paymentMethodId || filters.paymentMethodId === 'all') && styles.chipTextActive,
+                    (!filters.paymentMethodId || filters.paymentMethodId === 'all') &&
+                      styles.chipTextActive,
                   ]}
                 >
                   All
@@ -283,7 +353,10 @@ export function TransactionsScreen() {
                   onPress={() => setFilters((f) => ({ ...f, paymentMethodId: pm.id }))}
                 >
                   <Text
-                    style={[styles.chipText, filters.paymentMethodId === pm.id && styles.chipTextActive]}
+                    style={[
+                      styles.chipText,
+                      filters.paymentMethodId === pm.id && styles.chipTextActive,
+                    ]}
                   >
                     {pm.name}
                   </Text>
@@ -299,6 +372,7 @@ export function TransactionsScreen() {
                     ...f,
                     categoryId: undefined,
                     paymentMethodId: undefined,
+                    transactionType: 'all',
                   }))
                 }
               >
@@ -317,61 +391,71 @@ export function TransactionsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: staticColors.background },
   header: {
-    backgroundColor: colors.card,
+    backgroundColor: staticColors.card,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: staticColors.border,
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 16,
   },
-  title: { fontSize: 22, fontWeight: '700', color: colors.text, marginBottom: 12 },
+  title: { fontSize: 22, fontWeight: '700', color: staticColors.text, marginBottom: 10 },
+  typeRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  typeChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: staticColors.background,
+  },
+  typeChipActive: { backgroundColor: staticColors.primary },
+  typeChipText: { fontSize: 14, fontWeight: '600', color: staticColors.text },
+  typeChipTextActive: { color: staticColors.white },
   periodBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: staticColors.background,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
     marginBottom: 12,
     alignSelf: 'flex-start',
   },
-  periodBtnText: { fontSize: 14, fontWeight: '600', color: colors.text },
-  chevron: { fontSize: 10, color: colors.textSecondary, marginLeft: 4 },
+  periodBtnText: { fontSize: 14, fontWeight: '600', color: staticColors.text },
+  chevron: { fontSize: 10, color: staticColors.textSecondary, marginLeft: 4 },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: staticColors.background,
     borderRadius: 12,
     paddingHorizontal: 12,
     marginBottom: 12,
   },
   searchIcon: { fontSize: 16, marginRight: 8 },
-  searchInput: { flex: 1, paddingVertical: 12, fontSize: 16, color: colors.text },
+  searchInput: { flex: 1, paddingVertical: 12, fontSize: 16, color: staticColors.text },
   filterRow: { flexDirection: 'row', gap: 10 },
   sortBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.background,
+    backgroundColor: staticColors.background,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
   },
-  sortBtnText: { fontSize: 14, color: colors.text },
+  sortBtnText: { fontSize: 14, color: staticColors.text },
   filterBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: staticColors.background,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
     position: 'relative',
   },
-  filterBtnActive: { borderWidth: 2, borderColor: colors.primary },
-  filterBtnText: { fontSize: 14, color: colors.text, fontWeight: '500' },
+  filterBtnActive: { borderWidth: 2, borderColor: staticColors.primary },
+  filterBtnText: { fontSize: 14, color: staticColors.text, fontWeight: '500' },
   badge: {
     position: 'absolute',
     top: -4,
@@ -379,22 +463,19 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: colors.primary,
+    backgroundColor: staticColors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeText: { color: colors.white, fontSize: 11, fontWeight: '700' },
+  badgeText: { color: staticColors.white, fontSize: 11, fontWeight: '700' },
   emptyWrap: { flex: 1 },
-  scroll: { flex: 1 },
-  scrollContent: { paddingVertical: 16, paddingBottom: 32 },
-  dayGroup: { marginBottom: 20 },
+  list: { flex: 1 },
+  listContent: { paddingVertical: 16, paddingBottom: 100 },
+  sectionHeader: { marginBottom: 8, marginHorizontal: 20, paddingLeft: 4 },
   dayTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: 8,
-    marginHorizontal: 20,
-    paddingLeft: 4,
+    color: staticColors.textSecondary,
   },
   modalOverlay: {
     flex: 1,
@@ -402,37 +483,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
   },
-  modalContent: { backgroundColor: colors.card, borderRadius: 16, overflow: 'hidden' },
-  modalOption: { padding: 18, borderBottomWidth: 1, borderBottomColor: colors.border },
-  modalOptionText: { fontSize: 16, color: colors.text, fontWeight: '500' },
+  modalContent: { backgroundColor: staticColors.card, borderRadius: 16, overflow: 'hidden' },
+  modalOption: { padding: 18, borderBottomWidth: 1, borderBottomColor: staticColors.border },
+  modalOptionText: { fontSize: 16, color: staticColors.text, fontWeight: '500' },
   modalSheet: {
-    backgroundColor: colors.card,
+    backgroundColor: staticColors.card,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
     maxHeight: '80%',
   },
-  modalTitle: { fontSize: 20, fontWeight: '700', color: colors.text, marginBottom: 20 },
-  modalLabel: { fontSize: 14, fontWeight: '600', color: colors.textSecondary, marginBottom: 10 },
+  modalTitle: { fontSize: 20, fontWeight: '700', color: staticColors.text, marginBottom: 20 },
+  modalLabel: { fontSize: 14, fontWeight: '600', color: staticColors.textSecondary, marginBottom: 10 },
   chipScroll: { marginBottom: 16, maxHeight: 44 },
   chip: {
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: colors.background,
+    backgroundColor: staticColors.background,
     marginRight: 8,
   },
-  chipActive: { backgroundColor: colors.primary },
-  chipText: { fontSize: 14, color: colors.text, fontWeight: '500' },
-  chipTextActive: { color: colors.white },
+  chipActive: { backgroundColor: staticColors.primary },
+  chipText: { fontSize: 14, color: staticColors.text, fontWeight: '500' },
+  chipTextActive: { color: staticColors.white },
   clearBtn: { paddingVertical: 12, alignItems: 'center', marginBottom: 8 },
-  clearBtnText: { color: colors.expense, fontWeight: '600', fontSize: 15 },
+  clearBtnText: { color: staticColors.expense, fontWeight: '600', fontSize: 15 },
   doneBtn: {
-    backgroundColor: colors.primary,
+    backgroundColor: staticColors.primary,
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 8,
   },
-  doneBtnText: { color: colors.white, fontWeight: '700', fontSize: 16 },
+  doneBtnText: { color: staticColors.white, fontWeight: '700', fontSize: 16 },
 });
