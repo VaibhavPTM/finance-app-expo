@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { getIcon } from './IconMap';
 import { colors } from '../theme';
+import { getMainCategories } from '../utils/finance';
 import { Category, TransactionType } from '../types/finance';
 
 const ICON_OPTIONS = [
@@ -29,13 +30,17 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   onSave: (category: Omit<Category, 'id'>) => void;
+  categories: Category[];
 };
 
-export function AddCategoryModal({ visible, onClose, onSave }: Props) {
+export function AddCategoryModal({ visible, onClose, onSave, categories }: Props) {
   const [name, setName] = useState('');
   const [type, setType] = useState<TransactionType>('expense');
+  const [parentId, setParentId] = useState<string | null>(null);
   const [selectedIcon, setSelectedIcon] = useState('Circle');
   const [selectedColor, setSelectedColor] = useState('#3b82f6');
+
+  const mainCategories = getMainCategories(categories, type);
 
   const handleSubmit = () => {
     if (!name.trim()) return;
@@ -44,11 +49,13 @@ export function AddCategoryModal({ visible, onClose, onSave }: Props) {
       icon: selectedIcon,
       color: selectedColor,
       type,
+      parentId: parentId || undefined,
     });
     setName('');
     setSelectedIcon('Circle');
     setSelectedColor('#3b82f6');
     setType('expense');
+    setParentId(null);
     onClose();
   };
 
@@ -57,6 +64,7 @@ export function AddCategoryModal({ visible, onClose, onSave }: Props) {
     setSelectedIcon('Circle');
     setSelectedColor('#3b82f6');
     setType('expense');
+    setParentId(null);
     onClose();
   };
 
@@ -77,6 +85,29 @@ export function AddCategoryModal({ visible, onClose, onSave }: Props) {
               <View style={[styles.switchKnob, type === 'income' && styles.switchKnobOn]} />
             </TouchableOpacity>
             <Text style={[styles.toggleLabel, type === 'income' && styles.toggleLabelGreen]}>Income</Text>
+          </View>
+
+          <Text style={styles.label}>Parent category</Text>
+          <View style={styles.parentRow}>
+            <TouchableOpacity
+              style={[styles.parentChip, !parentId && styles.parentChipActive]}
+              onPress={() => setParentId(null)}
+            >
+              <Text style={[styles.parentChipText, !parentId && styles.parentChipTextActive]}>
+                None (Main category)
+              </Text>
+            </TouchableOpacity>
+            {mainCategories.map((main) => (
+              <TouchableOpacity
+                key={main.id}
+                style={[styles.parentChip, parentId === main.id && styles.parentChipActive]}
+                onPress={() => setParentId(main.id)}
+              >
+                <Text style={[styles.parentChipText, parentId === main.id && styles.parentChipTextActive]}>
+                  {main.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
           <Text style={styles.label}>Category name</Text>
@@ -185,6 +216,16 @@ const styles = StyleSheet.create({
   },
   switchKnobOn: { alignSelf: 'flex-end' },
   label: { fontSize: 14, fontWeight: '600', color: colors.textSecondary, marginBottom: 8 },
+  parentRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
+  parentChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: colors.background,
+  },
+  parentChipActive: { backgroundColor: colors.primary },
+  parentChipText: { fontSize: 14, fontWeight: '500', color: colors.text },
+  parentChipTextActive: { color: colors.white },
   input: {
     backgroundColor: colors.card,
     borderWidth: 2,

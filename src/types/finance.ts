@@ -13,6 +13,8 @@ export type Category = {
   icon: string;
   color: string;
   type: TransactionType;
+  /** Main category has no parentId; subcategory has parentId = main category id */
+  parentId?: string | null;
 };
 
 export type Transaction = {
@@ -27,12 +29,15 @@ export type Transaction = {
 
 export type TimePeriod = 'all' | 'this-week' | 'last-week' | 'this-month' | 'last-month' | 'custom';
 
+export type TransactionTypeFilter = 'all' | 'income' | 'expense';
+
 export type FilterOptions = {
   sortBy: 'date-newest' | 'date-oldest' | 'amount-highest' | 'amount-lowest';
   categoryId?: string;
   paymentMethodId?: string;
   searchQuery?: string;
   timePeriod: TimePeriod;
+  transactionType?: TransactionTypeFilter;
   customDateRange?: {
     start: Date;
     end: Date;

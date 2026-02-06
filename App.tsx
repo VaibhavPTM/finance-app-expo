@@ -1,22 +1,23 @@
 import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
 import { FinanceProvider } from './src/context/FinanceContext';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { DashboardScreen } from './src/screens/DashboardScreen';
 import { AddEntryScreen } from './src/screens/AddEntryScreen';
 import { TransactionsScreen } from './src/screens/TransactionsScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { getIcon } from './src/components/IconMap';
-import { colors } from './src/theme';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
 function MainTabs() {
+  const { colors } = useTheme();
   const HomeIcon = getIcon('Home');
   const ReceiptIcon = getIcon('Receipt');
   const SettingsIcon = getIcon('Settings');
@@ -65,28 +66,53 @@ function MainTabs() {
   );
 }
 
+function AppContent() {
+  const { theme, colors } = useTheme();
+  return (
+    <>
+      <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
+      <NavigationContainer
+        theme={{
+          ...DefaultTheme,
+          dark: theme === 'dark',
+          colors: {
+            ...DefaultTheme.colors,
+            primary: colors.primary,
+            background: colors.background,
+            card: colors.card,
+            text: colors.text,
+            border: colors.border,
+            notification: colors.primary,
+          },
+        }}
+      >
+        <Stack.Navigator
+          screenOptions={{
+            headerShown: false,
+            animation: 'slide_from_right',
+            contentStyle: { backgroundColor: colors.background },
+          }}
+        >
+          <Stack.Screen name="MainTabs" component={MainTabs} />
+          <Stack.Screen
+            name="AddEntry"
+            component={AddEntryScreen}
+            options={{ presentation: 'modal' }}
+          />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </>
+  );
+}
+
 export default function App() {
   return (
     <GestureHandlerRootView style={styles.root}>
-      <FinanceProvider>
-        <NavigationContainer>
-          <StatusBar style="auto" />
-          <Stack.Navigator
-            screenOptions={{
-              headerShown: false,
-              animation: 'slide_from_right',
-              contentStyle: { backgroundColor: colors.background },
-            }}
-          >
-            <Stack.Screen name="MainTabs" component={MainTabs} />
-            <Stack.Screen
-              name="AddEntry"
-              component={AddEntryScreen}
-              options={{ presentation: 'modal' }}
-            />
-          </Stack.Navigator>
-        </NavigationContainer>
-      </FinanceProvider>
+      <ThemeProvider>
+        <FinanceProvider>
+          <AppContent />
+        </FinanceProvider>
+      </ThemeProvider>
     </GestureHandlerRootView>
   );
 }

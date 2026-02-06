@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,9 @@ import {
 } from '../utils/finance';
 import { getIcon } from '../components/IconMap';
 import { EmptyState } from '../components/EmptyState';
+import { AppHeader } from '../components/AppHeader';
 import { useFinance } from '../context/FinanceContext';
+import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme';
 import { TimePeriod } from '../types/finance';
 
@@ -27,25 +29,40 @@ const PERIODS: TimePeriod[] = ['this-week', 'last-week', 'this-month', 'last-mon
 
 export function DashboardScreen() {
   const navigation = useNavigation<any>();
-  const { transactions, categories, addTransaction } = useFinance();
+  const { colors } = useTheme();
+  const { transactions, categories, quickAddCategoryIds } = useFinance();
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('this-month');
   const [showPeriodModal, setShowPeriodModal] = useState(false);
 
-  const filtered = filterTransactionsByPeriod(transactions, timePeriod);
-  const totals = calculateTotals(filtered);
-  const recent = filtered.slice(0, 5);
-  const byCategory = getExpensesByCategory(filtered);
-  const quickCategories = categories.filter((c) => c.type === 'expense').slice(0, 4);
+  const filtered = useMemo(
+    () => filterTransactionsByPeriod(transactions, timePeriod),
+    [transactions, timePeriod]
+  );
+  const totals = useMemo(() => calculateTotals(filtered), [filtered]);
+  const recent = useMemo(() => filtered.slice(0, 5), [filtered]);
+  const byCategory = useMemo(() => getExpensesByCategory(filtered), [filtered]);
+  const quickCategories = useMemo(() => {
+    if (quickAddCategoryIds.length > 0) {
+      return quickAddCategoryIds
+        .map((id) => categories.find((c) => c.id === id))
+        .filter((c): c is NonNullable<typeof c> => c != null);
+    }
+    return categories.filter((c) => c.type === 'expense').slice(0, 4);
+  }, [categories, quickAddCategoryIds]);
 
-  const openAddEntry = (categoryId?: string) => {
-    navigation.navigate('AddEntry', { preSelectedCategoryId: categoryId });
-  };
+  const openAddEntry = useCallback(
+    (categoryId?: string) => {
+      navigation.navigate('AddEntry', { preSelectedCategoryId: categoryId });
+    },
+    [navigation]
+  );
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+      <AppHeader />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Header summary */}
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: colors.primary }]}>
           <TouchableOpacity
             style={styles.periodButton}
             onPress={() => setShowPeriodModal(true)}
@@ -232,11 +249,10 @@ export function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
+  safe: { flex: 1 },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 24 },
   header: {
-    backgroundColor: colors.primary,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
     padding: 24,
