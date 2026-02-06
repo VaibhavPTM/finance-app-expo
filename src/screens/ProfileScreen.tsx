@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { useFinance } from '../context/FinanceContext';
 import { useTheme } from '../context/ThemeContext';
 import { getIcon } from '../components/IconMap';
@@ -17,6 +18,7 @@ export function ProfileScreen() {
     quickAddCategoryIds,
     setQuickAddCategoryIds,
     addCategory,
+    deleteCategory,
     addPaymentMethod,
   } = useFinance();
   const [showAddCategory, setShowAddCategory] = useState(false);
@@ -33,12 +35,36 @@ export function ProfileScreen() {
     }
   };
 
-  const renderCategoryRow = (cat: Category, isSub = false) => {
+  const handleDeleteCategory = (cat: Category) => {
+    const isMain = !cat.parentId;
+    Alert.alert(
+      'Delete category',
+      isMain
+        ? `Delete "${cat.name}" and all its subcategories?`
+        : `Delete "${cat.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => deleteCategory(cat.id) },
+      ]
+    );
+  };
+
+  const renderLeftDelete = (cat: Category) => (
+    <TouchableOpacity
+      style={[styles.deleteAction, { backgroundColor: colors.expense }]}
+      onPress={() => handleDeleteCategory(cat)}
+      activeOpacity={0.8}
+    >
+      <Text style={styles.deleteActionText}>Delete</Text>
+    </TouchableOpacity>
+  );
+
+  const renderCategoryRow = (cat: Category, isSub = false, includeKey = true) => {
     const Icon = getIcon(cat.icon || 'Circle');
     const isQuick = quickAddCategoryIds.includes(cat.id);
-    return (
+    const row = (
       <TouchableOpacity
-        key={cat.id}
+        {...(includeKey ? { key: cat.id } : {})}
         style={[styles.row, isSub && styles.subRow, { borderBottomColor: colors.border }]}
         onPress={() => toggleQuickAdd(cat.id)}
         activeOpacity={0.7}
@@ -54,6 +80,7 @@ export function ProfileScreen() {
         </View>
       </TouchableOpacity>
     );
+    return row;
   };
 
   const renderMainWithSubs = (main: Category, type: 'income' | 'expense') => {
@@ -61,14 +88,20 @@ export function ProfileScreen() {
     const Icon = getIcon(main.icon || 'Circle');
     return (
       <View key={main.id} style={styles.mainGroup}>
-        <View style={[styles.mainRow, { borderBottomColor: colors.border }]}>
-          <View style={[styles.iconWrap, { backgroundColor: `${main.color}20` }]}>
-            <Icon size={20} color={main.color} />
+        <Swipeable renderLeftActions={() => renderLeftDelete(main)}>
+          <View style={[styles.mainRow, { borderBottomColor: colors.border }]}>
+            <View style={[styles.iconWrap, { backgroundColor: `${main.color}20` }]}>
+              <Icon size={20} color={main.color} />
+            </View>
+            <Text style={[styles.mainRowText, { color: colors.text }]}>{main.name}</Text>
+            <Text style={[styles.chevron, { color: colors.textMuted }]}>›</Text>
           </View>
-          <Text style={[styles.mainRowText, { color: colors.text }]}>{main.name}</Text>
-          <Text style={[styles.chevron, { color: colors.textMuted }]}>›</Text>
-        </View>
-        {subs.map((sub) => renderCategoryRow(sub, true))}
+        </Swipeable>
+        {subs.map((sub) => (
+          <Swipeable key={sub.id} renderLeftActions={() => renderLeftDelete(sub)}>
+            {renderCategoryRow(sub, true, false)}
+          </Swipeable>
+        ))}
       </View>
     );
   };
@@ -265,4 +298,11 @@ const styles = StyleSheet.create({
   chevron: { fontSize: 20 },
   addBtnText: { fontSize: 15, fontWeight: '600' },
   footer: { textAlign: 'center', fontSize: 13, marginTop: 24 },
+  deleteAction: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    borderRadius: 0,
+  },
+  deleteActionText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });

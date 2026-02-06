@@ -7,7 +7,9 @@ import {
   StyleSheet,
   Modal,
   SafeAreaView,
+  Alert,
 } from 'react-native';
+import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { useNavigation } from '@react-navigation/native';
 import {
   formatCurrency,
@@ -30,7 +32,7 @@ const PERIODS: TimePeriod[] = ['this-week', 'last-week', 'this-month', 'last-mon
 export function DashboardScreen() {
   const navigation = useNavigation<any>();
   const { colors } = useTheme();
-  const { transactions, categories, quickAddCategoryIds } = useFinance();
+  const { transactions, categories, quickAddCategoryIds, deleteTransaction } = useFinance();
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('this-month');
   const [showPeriodModal, setShowPeriodModal] = useState(false);
 
@@ -55,6 +57,26 @@ export function DashboardScreen() {
       navigation.navigate('AddEntry', { preSelectedCategoryId: categoryId });
     },
     [navigation]
+  );
+
+  const handleDeleteRecent = useCallback(
+    (id: string) => {
+      Alert.alert('Delete transaction', 'Remove this transaction?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => deleteTransaction(id) },
+      ]);
+    },
+    [deleteTransaction]
+  );
+
+  const renderLeftDeleteTransaction = (id: string) => (
+    <TouchableOpacity
+      style={[styles.deleteAction, { backgroundColor: colors.expense }]}
+      onPress={() => handleDeleteRecent(id)}
+      activeOpacity={0.8}
+    >
+      <Text style={styles.deleteActionText}>Delete</Text>
+    </TouchableOpacity>
   );
 
   return (
@@ -181,29 +203,34 @@ export function DashboardScreen() {
               {recent.map((t) => {
                 const Icon = getIcon(t.category.icon || 'Circle');
                 return (
-                  <View key={t.id} style={styles.recentRow}>
-                    <View
-                      style={[
-                        styles.recentIconWrap,
-                        { backgroundColor: `${t.category.color}20` },
-                      ]}
-                    >
-                      <Icon size={24} color={t.category.color} />
+                  <Swipeable
+                    key={t.id}
+                    renderLeftActions={() => renderLeftDeleteTransaction(t.id)}
+                  >
+                    <View style={styles.recentRow}>
+                      <View
+                        style={[
+                          styles.recentIconWrap,
+                          { backgroundColor: `${t.category.color}20` },
+                        ]}
+                      >
+                        <Icon size={24} color={t.category.color} />
+                      </View>
+                      <View style={styles.recentContent}>
+                        <Text style={styles.recentCategory}>{t.category.name}</Text>
+                        <Text style={styles.recentDate}>{formatDate(t.date)}</Text>
+                      </View>
+                      <Text
+                        style={[
+                          styles.recentAmount,
+                          t.type === 'income' ? styles.amountIncome : styles.amountExpense,
+                        ]}
+                      >
+                        {t.type === 'income' ? '+' : '-'}
+                        {formatCurrency(t.amount)}
+                      </Text>
                     </View>
-                    <View style={styles.recentContent}>
-                      <Text style={styles.recentCategory}>{t.category.name}</Text>
-                      <Text style={styles.recentDate}>{formatDate(t.date)}</Text>
-                    </View>
-                    <Text
-                      style={[
-                        styles.recentAmount,
-                        t.type === 'income' ? styles.amountIncome : styles.amountExpense,
-                      ]}
-                    >
-                      {t.type === 'income' ? '+' : '-'}
-                      {formatCurrency(t.amount)}
-                    </Text>
-                  </View>
+                  </Swipeable>
                 );
               })}
             </View>
@@ -398,4 +425,11 @@ const styles = StyleSheet.create({
   modalContent: { backgroundColor: colors.card, borderRadius: 16, overflow: 'hidden' },
   modalOption: { padding: 18, borderBottomWidth: 1, borderBottomColor: colors.border },
   modalOptionText: { fontSize: 16, color: colors.text, fontWeight: '500' },
+  deleteAction: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    borderRadius: 0,
+  },
+  deleteActionText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 
@@ -9,9 +9,11 @@ type Props = {
   title?: string;
   /** If true, header uses primary color background; else card color */
   primary?: boolean;
+  /** Show back button and call this when pressed */
+  onBack?: () => void;
 };
 
-export function AppHeader({ title = APP_NAME, primary = false }: Props) {
+export function AppHeader({ title = APP_NAME, primary = false, onBack }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
 
@@ -32,7 +34,12 @@ export function AppHeader({ title = APP_NAME, primary = false }: Props) {
         },
       ]}
     >
-      <Text style={[styles.title, { color: textColor }]} numberOfLines={1}>
+      {onBack ? (
+        <TouchableOpacity style={styles.backBtn} onPress={onBack} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <Text style={[styles.backText, { color: textColor }]}>‹ Back</Text>
+        </TouchableOpacity>
+      ) : null}
+      <Text style={[styles.title, { color: textColor }, onBack && styles.titleWithBack]} numberOfLines={1}>
         {title}
       </Text>
     </View>
@@ -41,10 +48,17 @@ export function AppHeader({ title = APP_NAME, primary = false }: Props) {
 
 const styles = StyleSheet.create({
   wrapper: {
+    width: '100%',
     paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
+  backBtn: { marginRight: 12 },
+  backText: { fontSize: 17, fontWeight: '600' },
   title: {
     fontSize: 20,
     fontWeight: '700',
+    flexShrink: 1,
   },
+  titleWithBack: { flex: 1 },
 });
